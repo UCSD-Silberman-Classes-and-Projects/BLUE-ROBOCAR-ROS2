@@ -1,5 +1,0 @@
-adafruit_twist_node: 
-  ros__parameters: 
-    bus_num : 1
-    steering_channel : 1
-    throttle_channel : 2

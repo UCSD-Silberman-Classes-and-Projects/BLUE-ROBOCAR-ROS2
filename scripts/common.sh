@@ -12,8 +12,7 @@
 
 SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPTS_DIR/.." && pwd)"
-ONBOARD_WS="$REPO_ROOT/ros2_ws"
-OFFBOARD_WS="$REPO_ROOT/ros2_ws_offboard"
+ROS_WS="$REPO_ROOT/ros2_ws"
 
 ROS_DISTRO_NAME="${ROS_DISTRO_NAME:-${ROS_DISTRO:-jazzy}}"
 LOG_DIR="${LOG_DIR:-/tmp/rover}"
@@ -49,19 +48,6 @@ source_ws() {
     source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
     source "$ws/install/setup.bash"
     log "Sourced ROS 2 $ROS_DISTRO_NAME + $(basename "$ws")  (ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0})"
-}
-
-# source_overlay <workspace dir> — add a second workspace on top of the current
-# environment (local_setup.bash leaves already-sourced workspaces in place).
-source_overlay() {
-    local ws="$1"
-    if [ ! -f "$ws/install/local_setup.bash" ]; then
-        err "$ws/install/local_setup.bash not found — build it first (scripts/build.sh)"
-        exit 1
-    fi
-    set +u
-    source "$ws/install/local_setup.bash"
-    log "Overlaid $(basename "$ws")"
 }
 
 # ── Background processes + cleanup ────────────────────────────────────────────
@@ -109,8 +95,8 @@ check_topic() {
     fi
 }
 
-# Jetson only: report the power mode. SLAM + Nav2 onboard wants the highest
-# mode (MAXN); `sudo jetson_clocks` additionally pins clocks at max.
+# Jetson only: report the power mode. Heavy onboard perception/autonomy wants
+# the highest mode (MAXN); `sudo jetson_clocks` additionally pins clocks at max.
 check_power_mode() {
     command -v nvpmodel > /dev/null 2>&1 || return 0
     local mode
@@ -120,7 +106,7 @@ check_power_mode() {
     elif echo "$mode" | grep -qi "MAXN"; then
         ok "Jetson power mode: $mode"
     else
-        warn "Jetson power mode is $mode — for SLAM/Nav2 use the highest mode (sudo nvpmodel -m <MAXN id>; see nvpmodel -p --verbose)"
+        warn "Jetson power mode is $mode — for heavy workloads use the highest mode (sudo nvpmodel -m <MAXN id>; see nvpmodel -p --verbose)"
     fi
 }
 
@@ -203,9 +189,9 @@ start_vesc() {
         vesc_port:="$VESC_PORT"
 }
 
-# start_onboard <extra launch args...> — scan relay + EKF + robot_state_publisher (+ options)
-start_onboard() {
-    start_bg onboard ros2 launch robot_slam onboard.launch.py "$@"
+# start_rover <extra launch args...> — robot_state_publisher (+ use_rviz, use_cmd_vel)
+start_rover() {
+    start_bg rover ros2 launch rover_bringup rover.launch.py "$@"
 }
 
 print_teleop_keys() {

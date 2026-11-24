@@ -1,3 +1,0 @@
-sub_camera_node: 
-  ros__parameters: 
-    live_camera_feed : 1

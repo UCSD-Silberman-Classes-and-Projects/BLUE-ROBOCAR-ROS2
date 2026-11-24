@@ -1,6 +1,6 @@
 # <div align="center">Project Reproduction Guide</div>
 
-This guide walks through reproducing the Scout Survey Rover from scratch: OS setup, ROS 2 and sensor SDK installation, workspace build, udev and network setup, and first launch.
+This guide sets up the rover from scratch: OS setup, ROS 2 and sensor SDK installation, workspace build, udev and network setup, and first launch.
 
 > **Prefer containers?** [docker.md](docker.md) replaces sections 3, 4, the SDK build in 6, and 9 with a single image build. You still need JetPack 7.2 (§2), the Livox network link (§6), udev rules (§7) and VESC configuration (§8) on the host.
 
@@ -16,7 +16,7 @@ This guide walks through reproducing the Scout Survey Rover from scratch: OS set
 6. [Livox Mid-360 — network setup and SDK](#6-livox-mid-360--network-setup-and-sdk)
 7. [udev rules — VESC and OAK-D Pro](#7-udev-rules--vesc-and-oak-d-pro)
 8. [VESC configuration](#8-vesc-configuration)
-9. [Build the ROS 2 workspaces](#9-build-the-ros-2-workspaces)
+9. [Build the ROS 2 workspace](#9-build-the-ros-2-workspace)
 10. [First launch](#10-first-launch)
 11. [Calibration](#11-calibration)
 
@@ -24,13 +24,13 @@ This guide walks through reproducing the Scout Survey Rover from scratch: OS set
 
 ## 1. Hardware requirements
 
-See [robot_hardware.md](robot_hardware.md) for the full parts list and USB device assignments. The rover stack needs the Livox Mid-360, the OAK-D Pro, and the VESC. Frontier exploration also needs a second (GPU) machine on the same network.
+See [robot_hardware.md](robot_hardware.md) for the full parts list and USB device assignments. The rover stack needs the Livox Mid-360, the OAK-D Pro, and the VESC. A laptop on the same network with ROS 2 Jazzy and RViz is handy for visualization but optional.
 
 ---
 
 ## 2. OS setup — JetPack 7.2 (Ubuntu 24.04) on Jetson Orin Nano
 
-The onboard computer is an NVIDIA Jetson Orin Nano running **JetPack 7.2.x** (Jetson Linux / L4T 39.2.x), which is Ubuntu 24.04. The ROS 2 release for 24.04 is **Jazzy**. (JetPack 6 is Ubuntu 22.04 and can't install Jazzy from apt; on a JetPack 6 host use the CPU-only container build in [docker.md](docker.md#2-build-the-image) instead.) Everything runs natively, **not** inside Docker. This avoids the overhead of the UCSD RoboCar Hub2 Docker image and gives direct hardware access.
+The onboard computer is an NVIDIA Jetson Orin Nano running **JetPack 7.2.x** (Jetson Linux / L4T 39.2.x), which is Ubuntu 24.04. The ROS 2 release for 24.04 is **Jazzy**. (JetPack 6 is Ubuntu 22.04 and can't install Jazzy from apt; on a JetPack 6 host use the CPU-only container build in [docker.md](docker.md#2-build-the-image) instead.) This guide installs everything natively; [docker.md](docker.md) is the containerized alternative.
 
 ### Flash JetPack 7.2
 
@@ -44,7 +44,7 @@ During first-boot setup, create the user (`rover`), set the hostname, and enable
 cat /etc/nv_tegra_release      # R39.x → JetPack 7.2
 lsb_release -rs                # 24.04
 sudo apt update && sudo apt full-upgrade -y
-sudo nvpmodel -q               # check the power mode; pick the highest one (MAXN) for SLAM
+sudo nvpmodel -q               # check the power mode; pick the highest one (MAXN) for heavy workloads
 sudo reboot
 ```
 
@@ -87,7 +87,7 @@ echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 ```
 
-The GPU machine must also run **Jazzy** (Ubuntu 24.04). Message definitions changed between Humble and Jazzy (Nav2 actions in particular), so a Humble GPU machine can't drive a Jazzy rover. Don't mix distros between the two machines.
+Any other machine that talks to the rover (a laptop running RViz, an off-board GPU machine) must also run **Jazzy**. Message definitions changed between Humble and Jazzy, so don't mix distros.
 
 ---
 
@@ -95,12 +95,8 @@ The GPU machine must also run **Jazzy** (Ubuntu 24.04). Message definitions chan
 
 ### ROS 2 packages (apt)
 
-On the rover:
-
 ```bash
 sudo apt install -y \
-    ros-jazzy-robot-localization \
-    ros-jazzy-slam-toolbox \
     ros-jazzy-robot-state-publisher \
     ros-jazzy-pointcloud-to-laserscan \
     ros-jazzy-pcl-ros \
@@ -108,22 +104,14 @@ sudo apt install -y \
     ros-jazzy-joy \
     ros-jazzy-cv-bridge \
     ros-jazzy-tf2-ros \
-    ros-jazzy-nav2-map-server \
-    ros-jazzy-nav2-lifecycle-manager \
-    ros-jazzy-nav2-controller \
-    ros-jazzy-nav2-velocity-smoother \
-    ros-jazzy-nav2-regulated-pure-pursuit-controller \
-    ros-jazzy-nav2-costmap-2d \
-    python3-serial python3-pip
+    ros-jazzy-tf2-tools \
+    ros-jazzy-serial-driver \
+    ros-jazzy-rosbag2 \
+    libapr1-dev libpcl-dev \
+    python3-serial python3-pip iputils-ping usbutils
 ```
 
-On the GPU machine (Ubuntu 24.04 + ROS 2 Jazzy):
-
-```bash
-sudo apt install -y ros-jazzy-navigation2 ros-jazzy-slam-toolbox ros-jazzy-rviz2
-```
-
-`rosdep install --from-paths src --ignore-src -r -y` in either workspace catches anything missing from these lists.
+`rosdep install --from-paths src --ignore-src -r -y` in `ros2_ws` catches anything missing from this list.
 
 ### DepthAI v3 (OAK-D Pro)
 
@@ -142,12 +130,12 @@ python3 -c "import depthai, numpy, cv_bridge; print(depthai.__version__, numpy._
 
 ```bash
 cd ~
-git clone https://github.com/UCSD-ECEMAE-148/148sp26-spring-2026-final-project-team-4.git scout-survey-rover
-cd scout-survey-rover
+git clone <this-repo-url> rover
+cd rover
 git submodule update --init ros2_ws/src/livox_ros_driver2
 ```
 
-The scripts find the repo relative to their own location, so it can live anywhere. Docs use `~/scout-survey-rover`.
+The scripts find the repo relative to their own location, so it can live anywhere. Docs use `~/rover`.
 
 ---
 
@@ -214,29 +202,25 @@ The scripts pass the VESC port to the driver (`/dev/vesc`, else `/dev/ttyACM0`; 
 
 ---
 
-## 9. Build the ROS 2 workspaces
-
-Rover:
+## 9. Build the ROS 2 workspace
 
 ```bash
-cd ~/scout-survey-rover
+cd ~/rover
 source /opt/ros/jazzy/setup.bash
 (cd ros2_ws && rosdep install --from-paths src --ignore-src -r -y)
-scripts/build.sh onboard
+scripts/build.sh
 ```
 
-GPU machine: nothing to build yet. `ros2_ws_offboard` is reserved for the Q2 3DGS pipeline. Opt-in off-board SLAM (`scripts/offboard.sh slam`) needs only ROS 2 Jazzy and `ros-jazzy-slam-toolbox`.
-
-`scripts/build.sh onboard` copies `livox_ros_driver2/package_ROS2.xml` to `package.xml` (the driver ships no default manifest), passes `-DROS_EDITION=ROS2 -DDISTRO_ROS=jazzy`, and builds the packages the scripts need. Add `--all` to build every package in `ros2_ws/src`.
+`scripts/build.sh` copies `livox_ros_driver2/package_ROS2.xml` to `package.xml` (the driver ships no default manifest), passes `-DROS_EDITION=ROS2 -DDISTRO_ROS=jazzy`, and builds the packages the scripts need. Add `--all` to build every package in `ros2_ws/src`.
 
 ### Verify the build
 
 ```bash
 source ros2_ws/install/setup.bash
-ros2 pkg list | grep -E "^(robot_slam|livox_bringup|livox_ros_driver2|oakd_publisher|keyframe_bridge|vesc_driver|vesc_ackermann|ucsd_robocar_control2_pkg)$"
+ros2 pkg list | grep -E "^(rover_bringup|livox_bringup|livox_ros_driver2|oakd_publisher|vesc_driver|vesc_ackermann|ucsd_robocar_control2_pkg)$"
 ```
 
-All eight packages should appear.
+All seven packages should appear.
 
 ### Common build failures
 
@@ -244,7 +228,6 @@ All eight packages should appear.
 - **livox_ros_driver2 isn't built at all**: its `package.xml` is missing. Use `scripts/build.sh`, not a bare `colcon build`.
 - **`'uint8_t' was not declared` while building Livox-SDK2**: rebuild it with `-DCMAKE_CXX_FLAGS="-include cstdint"` (section 6).
 - **`error: externally-managed-environment` from pip**: add `--break-system-packages` (section 4).
-- **`robot_localization` build conflict**: a source copy is shadowing the apt package. Remove it with `rm -rf build/robot_localization install/robot_localization`.
 
 ---
 
@@ -253,12 +236,10 @@ All eight packages should appear.
 Work through the tests in order. [ros2_testing.md](ros2_testing.md) explains what to check at each step.
 
 ```bash
-cd ~/scout-survey-rover
-scripts/sensors.sh            # LiDAR + OAK-D (camera + IMU)
+cd ~/rover
+scripts/sensors.sh            # LiDAR + OAK-D (camera + IMU) + static TF
 scripts/teleop.sh             # keyboard driving only
-scripts/teleop_slam.sh        # keyboard driving while mapping on the Jetson
-scripts/teleop_glim.sh        # keyboard driving while 3D mapping with GLIM
-scripts/explore.sh            # autonomous frontier exploration, all on the Jetson
+scripts/bringup.sh --teleop   # keyboard driving with every sensor running
 ```
 
 Keep the rover still for the first ~5 s of any script that starts the OAK-D, while the gyro bias is calibrated.
@@ -283,7 +264,7 @@ steering_angle_to_servo_gain:   -0.6   # flip sign if steering direction is reve
 steering_angle_to_servo_offset:  0.5   # servo value (0.0–1.0) that centers the wheels
 ```
 
-A positive `steering_angle` must steer **left**. Nav2's `cmd_vel_to_ackermann_node` relies on it.
+A positive `steering_angle` must steer **left** (REP-103). `cmd_vel_to_ackermann_node` relies on it.
 
 ### Speed (eRPM gain)
 
@@ -295,14 +276,4 @@ Gyro bias calibration runs automatically for 5 s every time `oakd_publisher` sta
 
 ### Sensor mount poses
 
-Measure the LiDAR and camera positions relative to `base_link` (rear-axle center at ground level is a good convention for a car), then update `ros2_ws/src/robot_slam/urdf/robot.urdf.xacro`.
-
-### SLAM / EKF / Nav2 parameters
-
-| File | What it controls |
-|------|-----------------|
-| `robot_slam/config/ekf_local.yaml` | EKF inputs, process noise |
-| `robot_slam/config/slam_toolbox.yaml` | SLAM (onboard, and `scripts/offboard.sh slam` when run off-board) |
-| `robot_slam/config/nav2_params_onboard.yaml` | All of Nav2: controller (RPP), local costmap, velocity smoother, planner, BT navigator, behaviors, global costmap |
-
-Changes take effect on the next launch without rebuilding (symlink install).
+Measure the LiDAR and camera positions relative to `base_link` (rear-axle center at ground level is a good convention for a car), then update `ros2_ws/src/rover_bringup/urdf/robot.urdf.xacro`. Changes take effect on the next launch without rebuilding (symlink install).

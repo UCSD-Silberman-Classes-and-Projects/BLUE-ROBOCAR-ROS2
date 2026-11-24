@@ -7,7 +7,6 @@
 **/__pycache__/
 *.pyc
 docs/
-maps/
 bags/
 *.pdf
 # Personal overrides and editor config: not needed in the image, and changing

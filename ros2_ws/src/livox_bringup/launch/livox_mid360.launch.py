@@ -20,8 +20,9 @@ def generate_launch_description():
     publish_freq = LaunchConfiguration('publish_freq')
 
     # xfer_format 0 = sensor_msgs/PointCloud2 with Livox PointXYZRTLT fields
-    # (x, y, z, intensity, tag, line, timestamp). GLIM needs the per-point
-    # timestamp to deskew each scan; format 2 (plain PointXYZI) has none.
+    # (x, y, z, intensity, tag, line, timestamp). LiDAR-inertial odometry
+    # (e.g. GLIM, FAST-LIO) needs the per-point timestamp to deskew each scan;
+    # format 2 (plain PointXYZI) has none.
     # pointcloud_to_laserscan below only reads x/y/z, so it works with either.
     # (Format 1 is the custom livox_ros_driver2/CustomMsg, not a PointCloud2.)
     livox_driver_params = [
@@ -39,7 +40,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             name='topic_name',
             default_value='scan',
-            description='Output 2D LaserScan topic name (matches the retired ldlidar/LD06 topic)',
+            description='Output 2D LaserScan topic name',
         ),
         DeclareLaunchArgument(
             name='publish_freq',
@@ -82,8 +83,7 @@ def generate_launch_description():
         ),
 
         # Flattens the Mid-360's 3D point cloud (/livox/lidar) into a 2D
-        # sensor_msgs/LaserScan on the same 'scan' topic the SLAM stack
-        # (scan_relay_node -> slam_toolbox/amcl) previously consumed from ldlidar.
+        # sensor_msgs/LaserScan on /scan, for 2D consumers (slam_toolbox, Nav2 costmaps, ...).
         Node(
             package='pointcloud_to_laserscan',
             executable='pointcloud_to_laserscan_node',

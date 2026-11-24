@@ -3,7 +3,7 @@
 #
 #   keyboard_teleop_node → /ackermann_cmd → ackermann_to_vesc → vesc_driver → VESC
 #     (or with --joy: game_controller_node → /joy → f710_teleop_node → /ackermann_cmd)
-#   vesc_to_odom → /vesc_odom (wheel odometry, used by the EKF in the other scripts)
+#   vesc_to_odom → /vesc_odom (wheel odometry, nav_msgs/Odometry; no TF)
 #
 # Usage:
 #   scripts/teleop.sh              keyboard teleop in this terminal
@@ -24,7 +24,7 @@ done
 log "Preflight..."
 [ "$USE_JOY" = true ] && check_f710
 resolve_vesc_port
-source_ws "$ONBOARD_WS"
+source_ws "$ROS_WS"
 
 start_vesc
 sleep 3

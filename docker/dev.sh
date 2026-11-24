@@ -28,7 +28,7 @@ running() { [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null
 case "${1:-}" in
     up)
         # Create the bind-mount sources as you; Docker would create missing ones as root.
-        mkdir -p /tmp/rover "$REPO_ROOT/maps/custom"
+        mkdir -p /tmp/rover
         "${COMPOSE[@]}" up -d dev
         echo "Running. Open a shell with: docker/dev.sh shell"
         ;;
@@ -77,7 +77,7 @@ case "${1:-}" in
             echo "No $VOLUME volume; nothing to delete."
             exit 0
         fi
-        echo "This deletes the $VOLUME volume: /home/echou, including GitHub and Claude Code"
+        echo "This deletes the $VOLUME volume: /home/rover, including GitHub and Claude Code"
         echo "logins, git config and shell history. The checkout in $REPO_ROOT is not touched."
         read -r -p "Delete it? [y/N] " answer
         case "$answer" in

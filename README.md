@@ -1,58 +1,98 @@
-# <div align="center">Uncertainty-Guided Autonomous Exploration via 3D Gaussian Splatting on Low-Cost Robot Platforms</div>
+# <div align="center">Blue RoboCar ROS2 Container: Jetson Orin Nano + Livox Mid-360 + OAK-D Pro + VESC</div>
 
 <p align="center">
-  <img alt="Python" src="https://img.shields.io/badge/Python-control%20scripts-3776AB?style=flat-square&logo=python&logoColor=white">
-  <img alt="NVIDIA Jetson" src="https://img.shields.io/badge/Jetson%20Orin%20Nano-onboard%20compute-76B900?style=flat-square&logo=nvidia&logoColor=white">
   <img alt="ROS 2 Jazzy" src="https://img.shields.io/badge/ROS%202-Jazzy-22314E?style=flat-square&logo=ros&logoColor=white">
-  <img alt="Arduino" src="https://img.shields.io/badge/Arduino-Leonardo%20HID-00878F?style=flat-square&logo=arduino&logoColor=white">
+  <img alt="NVIDIA Jetson" src="https://img.shields.io/badge/Jetson%20Orin%20Nano-JetPack%207.2-76B900?style=flat-square&logo=nvidia&logoColor=white">
+  <img alt="Docker" src="https://img.shields.io/badge/Docker-dev%20container-2496ED?style=flat-square&logo=docker&logoColor=white">
   <img alt="VESC" src="https://img.shields.io/badge/VESC-motor%20control-2E7D32?style=flat-square">
-  <img alt="DepthAI OAK-D" src="https://img.shields.io/badge/DepthAI%20OAK--D-perception-00A3E0?style=flat-square">
+  <img alt="DepthAI OAK-D" src="https://img.shields.io/badge/DepthAI%20OAK--D%20Pro-RGB--D%20%2B%20IMU-00A3E0?style=flat-square">
 </p>
 
-### <div align="center"> Undergraduate ECE Honors Program Project (FA26 - WI27)</div>
-#### <div align="center"> Evan Chou (ECE: Machine Learning and Controls), Class of 2027 </div>
+![image](docs/media/car.jpg)
 
-![image](https://raw.githubusercontent.com/UCSD-ECEMAE-148/148sp26-spring-2026-final-project-team-4/main/docs/media/car.jpg)
+A starting point for projects on the Blue RoboCar. It holds only the hardware layer: sensor drivers, the VESC motor/steering driver, keyboard and gamepad teleop, the robot's static TF, and one-command scripts to bring all of it up and check that it works. Localization, mapping, planning and perception are left for your project.
 
-## Abstract
+Clone it, get every test in [docs/ros2_testing.md](docs/ros2_testing.md) passing on your rover, then add your own packages on top.
 
-TBD
+## Hardware
 
-<hr>
+| Component | Interface | ROS 2 topics |
+|-----------|-----------|--------------|
+| NVIDIA Jetson Orin Nano | JetPack 7.2 (Ubuntu 24.04), ROS 2 Jazzy | |
+| Livox Mid-360 LiDAR | Ethernet (`192.168.1.124`, Jetson `192.168.1.50`) | `/livox/lidar`, `/livox/imu`, `/scan` |
+| Luxonis OAK-D Pro | USB 3 | `/oakd/color/image_raw`, `/oakd/depth/image_raw`, `/oakd/*/camera_info`, `/oakd/imu` |
+| VESC (drive motor + steering servo) | USB serial (`/dev/vesc`) | `/ackermann_cmd` (in), `/vesc_odom`, `/sensors/core` |
+| Logitech F710 gamepad (optional) | USB receiver | `/joy` |
 
-## Media
+Full parts list, mount frames and wiring notes: [docs/robot_hardware.md](docs/robot_hardware.md).
 
-*Click the thumbnails to open the media.*
+## Quick start
 
-### Final Presentation Slides
-[<img src="docs\media\presentation.jpg" width="300">](https://docs.google.com/presentation/d/100er0TgurMbT8JcgmrrsiwRIkXcWnn7BoJnauJ2WcTg/edit?usp=sharing)
+```bash
+git clone <this-repo-url> && cd <this-repo-url>
+git submodule update --init ros2_ws/src/livox_ros_driver2
 
-### Demo Video
-[<img src="docs\media\video.jpg" width="300">](https://drive.google.com/file/d/1kE3kcbYyW5jzt6wzRNw6U-6pjJctakA8/view?usp=sharing)
+# Host setup once (udev rules, Livox network, Docker + NVIDIA Container Toolkit): docs/docker.md §1
+docker/dev.sh up && docker/dev.sh shell       # persistent dev container on the Jetson
+scripts/build.sh
 
-<hr>
+scripts/sensors.sh                            # LiDAR + OAK-D, with topic checks
+scripts/teleop.sh                             # keyboard driving (--joy for the F710)
+scripts/bringup.sh --teleop                   # everything at once, driving by hand
+```
+
+Prefer a native install? Follow [docs/reproduction.md](docs/reproduction.md) instead of the Docker steps.
+
+## Scripts
+
+| Script | Starts |
+|--------|--------|
+| `scripts/build.sh [--all] [--clean]` | `colcon build` of `ros2_ws` with the Livox driver workarounds (`--all` includes your own packages) |
+| `scripts/sensors.sh [--lidar\|--oakd] [--rviz]` | Livox Mid-360, OAK-D Pro (RGB-D + IMU), static TF |
+| `scripts/teleop.sh [--joy]` | VESC stack + keyboard teleop (`--joy`: Logitech F710) |
+| `scripts/bringup.sh [--teleop\|--joy] [--cmd-vel] [--rviz]` | Sensors + VESC + static TF. Headless by default, for your own nodes; `--cmd-vel` adds a `/cmd_vel` (Twist) → `/ackermann_cmd` adapter |
+| `scripts/record.sh [--no-images] [--no-compress]` | MCAP bag of the raw sensor topics into `bags/` |
+
+Logs go to `/tmp/rover/<component>.log`. Overrides: `VESC_PORT`, `LIVOX_IP`, `ROS_DOMAIN_ID`, `LOG_DIR`.
+
+## Adding your project
+
+1. Put your packages in `ros2_ws/src/` (or a separate workspace overlaid on this one) and build with `scripts/build.sh --all`.
+2. Start the hardware with `scripts/bringup.sh` (add `--cmd-vel` if your stack outputs `geometry_msgs/Twist`).
+3. Run your nodes in another shell (`docker/dev.sh shell`). Subscribe to the sensor topics above and drive by publishing `ackermann_msgs/AckermannDriveStamped` on `/ackermann_cmd`.
+4. Add apt/pip dependencies to [docker/Dockerfile](docker/Dockerfile) or your `package.xml`.
+
+What's provided and what isn't:
+
+- **TF:** only the static `base_link → livox_frame, oakd_link → oakd_camera_optical_frame, oakd_imu_frame`. Your localization owns `odom → base_link` (and `map → odom`). `/vesc_odom` publishes wheel odometry without TF.
+- **Command arbitration:** none. Teleop and your nodes both publish `/ackermann_cmd`, and the last message wins. Add a mux if you need teleop to override autonomy.
+
+Interfaces in detail: [docs/software_systems.md](docs/software_systems.md#interfaces-for-your-code).
+
+## Repository layout
+
+```
+ros2_ws/src/
+  livox_bringup/              Mid-360 launch + config (driver: livox_ros_driver2 submodule)
+  livox_ros_driver2/          git submodule (Livox-SDK/livox_ros_driver2)
+  oakd_publisher/             OAK-D Pro RGB-D + IMU driver (DepthAI v3)
+  vesc/                       VESC driver, Ackermann ↔ VESC conversion, odometry
+  ucsd_robocar_control2_pkg/  keyboard + F710 teleop, VESC stack launch
+  rover_bringup/              URDF/TF, sensor RViz layout, /cmd_vel adapter
+scripts/                      one-command launchers (see above)
+docker/                       image, Compose services, dev container helper
+udev/99-rover.rules           stable /dev/vesc, OAK-D and F710 permissions
+docs/                         setup, testing and reference guides
+```
 
 ## Documentation
 
-- [Project Reproduction guide](docs/reproduction.md) if you are interested in reproducing our project.
-- [ROS 2 testing guide](docs/ros2_testing.md) for Livox Mid-360, OAK-D Pro camera/IMU, teleop, SLAM, and frontier exploration tests.
-- [Launch scripts & troubleshooting](docs/full_stage_testing.md) for the one-command launchers in [`scripts/`](scripts).
-- [GLIM guide](docs/glim.md) for 3D LiDAR-inertial SLAM onboard, raw-sensor recording, and offline mapping on a workstation.
-- [Docker guide](docs/docker.md) for building and running the whole stack as a container on the Jetson Orin Nano.
-- [Software Systems documentation](docs/software_systems.md) for learning about our software architectures and systems.
-- [Robot Hardware documentation](docs/robot_hardware.md) for learning about our improved hardware components, including electrical and mechanical revamps.
-- [Project Proposal](docs/proposal.pdf) for reading state-of-the-art methods, plans, and potential limitations.
-
-<hr>
+- [Reproduction guide](docs/reproduction.md): native setup from a fresh Jetson (JetPack, ROS 2, Livox SDK, udev, VESC, calibration).
+- [Docker guide](docs/docker.md): building and running everything in a container on the Jetson, and the dev container workflow.
+- [ROS 2 testing guide](docs/ros2_testing.md): what to check for each sensor, teleop, full bringup, and troubleshooting.
+- [Software systems](docs/software_systems.md): drivers, data flow, TF, and the interfaces your code plugs into.
+- [Robot hardware](docs/robot_hardware.md): parts list, sensor frames, USB and network assignments.
 
 ## Acknowledgements
 
-Special thank you to Professor Truong Nguyen and Professor Jack Silberman for sponsoring and advising my project!
-
-README.md Format, reference to [winter-2024-final-project-team-7](https://github.com/UCSD-ECEMAE-148/winter-2024-final-project-team-7)
-
-<hr>
-
-## Contacts
-
-* Evan Chou - e3chou@ucsd.edu | evan.chou@live.com | [LinkedIn](https://www.linkedin.com/in/evanjchou/)
+Built from Evan Chou's UCSD ECE Honors project rover (advised by Prof. Truong Nguyen and Prof. Jack Silberman). Teleop and VESC packages are adapted from the [UCSD RoboCar Hub2](https://github.com/UCSD-ECEMAE-148) and [f1tenth/vesc](https://github.com/f1tenth/vesc).

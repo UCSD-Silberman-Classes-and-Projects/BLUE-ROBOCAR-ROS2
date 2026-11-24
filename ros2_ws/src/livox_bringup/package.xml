@@ -3,7 +3,7 @@
 <package format="3">
   <name>livox_bringup</name>
   <version>0.0.0</version>
-  <description>Onboard bringup for the Livox Mid-360 LiDAR: starts livox_ros_driver2 and converts its point cloud to a 2D sensor_msgs/LaserScan on /scan (replaces the LD06/ldlidar bringup).</description>
+  <description>Onboard bringup for the Livox Mid-360 LiDAR: starts livox_ros_driver2 and converts its point cloud to a 2D sensor_msgs/LaserScan on /scan.</description>
   <maintainer email="evan.chou@live.com">evanc</maintainer>
   <license>Apache-2.0</license>
 

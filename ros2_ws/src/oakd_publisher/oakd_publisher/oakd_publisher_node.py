@@ -44,10 +44,9 @@ class OakdPublisherNode(Node):
     reports zero distortion. Intrinsics come from each frame's own
     ImgTransformation, which accounts for the device-side crop and scale.
 
-    Pose is not embedded here — downstream consumers (e.g. the keyframe bridge)
-    look up the camera_frame -> map transform at the image header stamp via tf2,
-    using the EKF-published odom/tf. This keeps the onboard node a plain sensor
-    driver with no coupling to localization or the off-board pipeline.
+    Pose is not embedded here — downstream consumers look up the camera frame
+    in tf2 at the image header stamp, using whatever localization they run.
+    This keeps the node a plain sensor driver with no coupling to localization.
 
     IMU samples are rotated into imu_frame, which is axis-aligned with the
     camera body link (x forward, y left, z up), so the URDF only needs the
@@ -59,9 +58,8 @@ class OakdPublisherNode(Node):
         super().__init__('oakd_publisher_node')
 
         self.declare_parameter('camera_frame', 'oakd_camera_optical_frame')
-        # 720p for 3DGS keyframes (the Pi 5 ran 640x480). Frame rate stays at
-        # 15 Hz: keyframe_bridge only republishes on motion, and every raw frame
-        # is ~2.7 MB color + 1.8 MB depth through the middleware.
+        # 720p at 15 Hz: every raw frame is ~2.7 MB color + 1.8 MB depth
+        # through the middleware, so raise either with care.
         self.declare_parameter('rgb_width', 1280)
         self.declare_parameter('rgb_height', 720)
         self.declare_parameter('fps', 15.0)
@@ -72,11 +70,11 @@ class OakdPublisherNode(Node):
         self.declare_parameter('mono_height', 400)
         # StereoDepth.PresetMode name (DEFAULT, ACCURACY, DENSITY, ROBOTICS, ...).
         self.declare_parameter('stereo_preset', 'DEFAULT')
-        # Undistort color on the device so consumers (3DGS) can assume a pinhole
+        # Undistort color on the device so consumers can assume a pinhole
         # camera. If false, CameraInfo carries the EEPROM distortion instead.
         self.declare_parameter('rgb_undistort', True)
         # Manual color exposure/white balance. 0 = auto. Lock both for
-        # benchmark runs so PSNR doesn't change with auto-exposure drift.
+        # repeatable runs so images don't change with auto-exposure drift.
         self.declare_parameter('rgb_exposure_us', 0)
         self.declare_parameter('rgb_iso', 400)
         self.declare_parameter('rgb_white_balance_k', 0)

@@ -43,7 +43,7 @@ build_ros2_pkg() {
   source install/setup.bash || die "Failed to source $WORKSPACE_ROOT/install/setup.bash"
 }
 
-complete -W "robot_slam" build_ros2_pkg
+complete -W "rover_bringup livox_bringup oakd_publisher ucsd_robocar_control2_pkg vesc_driver vesc_ackermann" build_ros2_pkg
 
 main() {
   build_ros2 || return 1

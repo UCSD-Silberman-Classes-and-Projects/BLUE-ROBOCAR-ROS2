@@ -1,7 +1,7 @@
-# Rover stack on the Jetson Orin Nano (or the off-board machine).
+# Rover template stack on the Jetson Orin Nano.
 #
 #   docker compose -f docker/compose.yaml build
-#   docker compose -f docker/compose.yaml run --rm rover scripts/teleop_slam.sh
+#   docker compose -f docker/compose.yaml run --rm rover scripts/bringup.sh
 #   docker compose -f docker/compose.yaml run --rm rover            # shell
 #   docker/dev.sh up && docker/dev.sh shell                         # persistent dev container, see below
 #
@@ -22,7 +22,7 @@ x-rover: &rover
   build:
     context: ..
     dockerfile: docker/Dockerfile
-    # UID/GID of the image's non-root `echou` user (used by the dev service).
+    # UID/GID of the image's non-root `rover` user (used by the dev service).
     # Set on the shared build so both services build the same image.
     args:
       USER_UID: ${USER_UID:-1000}
@@ -54,21 +54,20 @@ services:
     volumes:
       - /dev:/dev
       - /tmp/rover:/tmp/rover                       # component logs, readable on the host
-      - ../maps:/opt/rover/ros2_ws/src/robot_slam/ros_data/maps   # saved maps persist on the host
       - ../bags:/opt/rover/bags                     # scripts/record.sh output persists on the host
       - /tmp/.X11-unix:/tmp/.X11-unix               # optional: RViz on the Jetson's display
 
   # Development: one long-running container (docker/dev.sh, or VS Code via
-  # .devcontainer/) with this checkout mounted at /opt/echou-honors-dev, so
-  # edits apply without rebuilding the image. Runs as `echou`, whose UID/GID
+  # .devcontainer/) with this checkout mounted at /opt/rover-dev, so
+  # edits apply without rebuilding the image. Runs as `rover`, whose UID/GID
   # match the host user, so build/install/log in the checkout are owned by you.
   # Logins (gh, Claude Code, git config) live in the rover-home volume, never in
-  # the image. The image's own copy stays at /opt/rover (read-only to echou).
+  # the image. The image's own copy stays at /opt/rover (read-only to rover).
   dev:
     <<: *rover
     container_name: rover-dev
-    user: echou
-    working_dir: /opt/echou-honors-dev
+    user: rover
+    working_dir: /opt/rover-dev
     # GPU access as a non-root user. With all of /dev mounted, CUDA opens the
     # host's device nodes, and /dev/dri/renderD* need the host's `render` group.
     # The NVIDIA runtime grants it to the container's first process only, not to
@@ -82,16 +81,15 @@ services:
       - VESC_PORT
       - LIVOX_IP
       - DISPLAY
-      - CLAUDE_CONFIG_DIR=/home/echou/.claude
-      - ROVER_WORKSPACE=/opt/echou-honors-dev     # read by entrypoint.sh
+      - CLAUDE_CONFIG_DIR=/home/rover/.claude
+      - ROVER_WORKSPACE=/opt/rover-dev            # read by entrypoint.sh
     volumes:
       - /dev:/dev
       - /tmp/rover:/tmp/rover
-      - ..:/opt/echou-honors-dev
-      - ../maps:/opt/echou-honors-dev/ros2_ws/src/robot_slam/ros_data/maps
+      - ..:/opt/rover-dev
       - /tmp/.X11-unix:/tmp/.X11-unix
       - /etc/localtime:/etc/localtime:ro            # host time zone, so log timestamps match the host
-      - rover-home:/home/echou
+      - rover-home:/home/rover
 
 volumes:
   rover-home:

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Container entrypoint: source ROS 2 and whichever workspaces are built, then run
+# Container entrypoint: source ROS 2 and the workspace if it's built, then run
 # the command (default: bash). Runs as root (rover service) or as the non-root
-# echou user (dev service); it only reads files.
+# rover user (dev service); it only reads files.
 #
 # ROVER_WORKSPACE is the checkout to use: /opt/rover (baked into the image) by
-# default, /opt/echou-honors-dev (the host checkout) in the dev service. Each
-# workspace's install/ there wins; until you build it, the image's copy under
-# /opt/rover is used instead. Missing workspaces are skipped.
+# default, /opt/rover-dev (the host checkout) in the dev service. Its
+# ros2_ws/install/ wins; until you build it, the image's copy under /opt/rover
+# is used instead.
 #
 # /etc/bash.bashrc also sources this file, for interactive shells that don't
 # start through the entrypoint; it stops before the cd/exec in that case.
@@ -22,7 +22,6 @@ _rover_source_ws() {  # <workspace> <setup file>
     fi
 }
 _rover_source_ws ros2_ws setup.bash
-_rover_source_ws ros2_ws_offboard local_setup.bash
 unset -f _rover_source_ws
 export ROVER_ENV_SOURCED=1
 [ "${BASH_SOURCE[0]}" != "$0" ] && return

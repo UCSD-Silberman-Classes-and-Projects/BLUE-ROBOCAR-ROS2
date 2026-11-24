@@ -1,23 +1,20 @@
 #!/usr/bin/env bash
-# build.sh — build the onboard (rover) or off-board (GPU machine) workspace.
+# build.sh — build the rover workspace (ros2_ws).
 #
 # Usage:
-#   scripts/build.sh onboard          packages the rover stack needs (default)
-#   scripts/build.sh onboard --all    every package in ros2_ws/src
-#   scripts/build.sh offboard         ros2_ws_offboard (3DGS pipeline; empty until it lands)
-#   scripts/build.sh onboard --clean  wipe build/ install/ log/ first
-#   scripts/build.sh onboard --no-symlink   copy files into install/ (Docker image builds;
-#                                           lets build/ be deleted afterwards)
+#   scripts/build.sh                 packages the scripts need (default)
+#   scripts/build.sh --all           every package in ros2_ws/src (add your own packages there)
+#   scripts/build.sh --clean         wipe build/ install/ log/ first
+#   scripts/build.sh --no-symlink    copy files into install/ (Docker image builds;
+#                                    lets build/ be deleted afterwards)
 #
-# Onboard prerequisites: Livox-SDK2 installed (docs/reproduction.md §6) and the
+# Prerequisites: Livox-SDK2 installed (docs/reproduction.md §6) and the
 # livox_ros_driver2 submodule initialised.
 
 _TAG=build
 source "$(dirname "$0")/common.sh"
 trap - EXIT INT TERM   # nothing to clean up
 
-TARGET="${1:-onboard}"
-shift || true
 ALL=false
 CLEAN=false
 INSTALL_MODE=(--symlink-install)
@@ -31,13 +28,11 @@ for arg in "$@"; do
 done
 
 # Packages the scripts in scripts/ launch (plus their dependencies).
-ONBOARD_PACKAGES=(
-    robot_slam
+BASE_PACKAGES=(
+    rover_bringup
     livox_bringup
     livox_ros_driver2
     oakd_publisher
-    keyframe_bridge
-    frontier_explorer
     ucsd_robocar_control2_pkg
     vesc_driver
     vesc_ackermann
@@ -50,43 +45,25 @@ fi
 set +u
 source "/opt/ros/$ROS_DISTRO_NAME/setup.bash"
 
-case "$TARGET" in
-    onboard)
-        WS="$ONBOARD_WS"
-        LIVOX="$WS/src/livox_ros_driver2"
-        if [ ! -f "$LIVOX/package_ROS2.xml" ]; then
-            err "livox_ros_driver2 submodule is empty — run: git submodule update --init ros2_ws/src/livox_ros_driver2"
-            exit 1
-        fi
-        # The driver ships ROS1/ROS2 manifests side by side and expects its own
-        # build.sh to copy one into place; that script also wipes the whole
-        # workspace's build/install, so do just the copy here instead.
-        if ! cmp -s "$LIVOX/package_ROS2.xml" "$LIVOX/package.xml"; then
-            cp "$LIVOX/package_ROS2.xml" "$LIVOX/package.xml"
-            log "Installed livox_ros_driver2 package.xml (ROS 2 manifest)"
-        fi
-        CMAKE_ARGS=(--cmake-args -DROS_EDITION=ROS2 -DDISTRO_ROS="$ROS_DISTRO_NAME")
-        if [ "$ALL" = true ]; then
-            SELECT=()
-        else
-            SELECT=(--packages-up-to "${ONBOARD_PACKAGES[@]}")
-        fi
-        ;;
-    offboard)
-        WS="$OFFBOARD_WS"
-        CMAKE_ARGS=()
-        SELECT=()
-        # Placeholder until the 3DGS packages land; SLAM/Nav2/explorer are onboard now.
-        if [ -z "$(find "$WS/src" -name package.xml 2>/dev/null)" ]; then
-            ok "ros2_ws_offboard has no packages yet (3DGS pipeline pending) — nothing to build"
-            exit 0
-        fi
-        ;;
-    *)
-        err "Usage: scripts/build.sh {onboard|offboard} [--all] [--clean]"
-        exit 1
-        ;;
-esac
+WS="$ROS_WS"
+LIVOX="$WS/src/livox_ros_driver2"
+if [ ! -f "$LIVOX/package_ROS2.xml" ]; then
+    err "livox_ros_driver2 submodule is empty — run: git submodule update --init ros2_ws/src/livox_ros_driver2"
+    exit 1
+fi
+# The driver ships ROS1/ROS2 manifests side by side and expects its own
+# build.sh to copy one into place; that script also wipes the whole
+# workspace's build/install, so do just the copy here instead.
+if ! cmp -s "$LIVOX/package_ROS2.xml" "$LIVOX/package.xml"; then
+    cp "$LIVOX/package_ROS2.xml" "$LIVOX/package.xml"
+    log "Installed livox_ros_driver2 package.xml (ROS 2 manifest)"
+fi
+CMAKE_ARGS=(--cmake-args -DROS_EDITION=ROS2 -DDISTRO_ROS="$ROS_DISTRO_NAME")
+if [ "$ALL" = true ]; then
+    SELECT=()
+else
+    SELECT=(--packages-up-to "${BASE_PACKAGES[@]}")
+fi
 
 cd "$WS" || exit 1
 if [ "$CLEAN" = true ]; then

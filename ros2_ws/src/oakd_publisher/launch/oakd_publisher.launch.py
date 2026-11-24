@@ -44,7 +44,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             name='rgb_exposure_us',
             default_value='0',
-            description='Manual color exposure in microseconds (0 = auto). Lock for benchmark runs',
+            description='Manual color exposure in microseconds (0 = auto). Lock for repeatable runs',
         ),
         DeclareLaunchArgument(
             name='rgb_iso',
@@ -54,12 +54,12 @@ def generate_launch_description():
         DeclareLaunchArgument(
             name='rgb_white_balance_k',
             default_value='0',
-            description='Manual color white balance in kelvin (0 = auto). Lock for benchmark runs',
+            description='Manual color white balance in kelvin (0 = auto). Lock for repeatable runs',
         ),
         DeclareLaunchArgument(
             name='enable_imu',
             default_value='true',
-            description='Publish the OAK-D Pro onboard IMU on /oakd/imu (feeds the EKF)',
+            description='Publish the OAK-D Pro onboard IMU on /oakd/imu',
         ),
         DeclareLaunchArgument(
             name='imu_rate_hz',

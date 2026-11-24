@@ -3,7 +3,7 @@
 <package format="3">
   <name>oakd_publisher</name>
   <version>0.0.0</version>
-  <description>Onboard OAK-D Pro driver: RGB-D frames for keyframing and the onboard IMU on /oakd/imu for the EKF.</description>
+  <description>Onboard OAK-D Pro driver: aligned RGB-D frames on /oakd/{color,depth} and the onboard IMU on /oakd/imu.</description>
   <maintainer email="evan.chou@live.com">evanc</maintainer>
   <license>Apache-2.0</license>
 

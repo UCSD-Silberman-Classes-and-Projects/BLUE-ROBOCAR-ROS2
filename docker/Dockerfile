@@ -1,10 +1,11 @@
-# Rover stack image: ROS 2 Jazzy (Ubuntu 24.04) with both workspaces built.
+# Rover template image: ROS 2 Jazzy (Ubuntu 24.04) with the sensor/driver workspace built.
 #
 # Built for the Jetson Orin Nano on JetPack 7.2 (L4T r39, linux/arm64). JetPack
 # 7.2 moves the Orin family onto the arm64-SBSA CUDA stack, so NVIDIA's standard
 # multi-arch CUDA images run on it, with the host's GPU driver injected by the
-# NVIDIA Container Toolkit (`runtime: nvidia` in compose.yaml). The same base
-# builds on an x86 GPU machine for the off-board half (3DGS; opt-in off-board SLAM).
+# NVIDIA Container Toolkit (`runtime: nvidia` in compose.yaml), so your own
+# GPU perception code can use CUDA inside the container. The same Dockerfile
+# also builds on an x86 machine.
 #
 #   docker build -f docker/Dockerfile -t rover:jazzy .         # from the repo root
 #
@@ -28,7 +29,7 @@ ARG ROS_APT_SOURCE_VERSION=1.3.0
 # Dev tools. Claude Code's npm package needs Node.js 22 or later; 24 is the current LTS.
 ARG NODE_MAJOR=24
 ARG CLAUDE_CODE_VERSION=2.1.310
-# Non-root user (echou) for the dev service. Match the host user (id -u / id -g) so files
+# Non-root user (rover) for the dev service. Match the host user (id -u / id -g) so files
 # written into the bind-mounted checkout are owned by you on the host.
 ARG USER_UID=1000
 ARG USER_GID=1000
@@ -59,8 +60,9 @@ RUN if [ ! -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]; then \
     fi
 
 # ── System + ROS dependencies ─────────────────────────────────────────────────
-# Onboard: sensors, EKF, SLAM, Nav2 controller, VESC. Off-board: Nav2 global
-# side (navigation2 covers both). Tools: the launch scripts use ping and lsusb.
+# Sensor drivers, TF, VESC, teleop and bag recording. Add the packages your own
+# perception/autonomy code needs here (or to its package.xml for rosdep).
+# Tools: the launch scripts use ping and lsusb.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential cmake git \
         python3-pip python3-colcon-common-extensions python3-rosdep \
@@ -68,8 +70,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         iputils-ping usbutils iproute2 \
         libusb-1.0-0 udev \
         libapr1-dev libpcl-dev \
-        ros-${ROS_DISTRO}-robot-localization \
-        ros-${ROS_DISTRO}-slam-toolbox \
         ros-${ROS_DISTRO}-robot-state-publisher \
         ros-${ROS_DISTRO}-pointcloud-to-laserscan \
         ros-${ROS_DISTRO}-pcl-conversions \
@@ -79,32 +79,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-${ROS_DISTRO}-cv-bridge \
         ros-${ROS_DISTRO}-tf2-ros \
         ros-${ROS_DISTRO}-tf2-tools \
-        ros-${ROS_DISTRO}-navigation2 \
         ros-${ROS_DISTRO}-serial-driver \
         ros-${ROS_DISTRO}-asio-cmake-module \
         ros-${ROS_DISTRO}-rosbag2 \
     && rm -rf /var/lib/apt/lists/*
-
-# ── GLIM 3D LiDAR-inertial SLAM (koide3 PPA; docs/glim.md) ────────────────────
-# On the CUDA base this installs the cuda13.1 build. It needs only the
-# libcudart.so.13 already in this image (13.x shares one ABI), pulls in no CUDA
-# toolkit, and its sm_80 kernels run on the Orin's sm_87. All of that stays
-# inside the image; nothing on the JetPack host changes. On the CPU-only base
-# (no /usr/local/cuda) the plain build is installed; launch it with use_gpu:=false.
-ARG GLIM_VERSION=1.2.2
-ARG GTSAM_POINTS_VERSION=1.2.2
-RUN apt-get update && apt-get install -y --no-install-recommends gnupg && \
-    curl -fsSL --compressed https://koide3.github.io/ppa/ubuntu2404/KEY.gpg \
-        | gpg --dearmor -o /etc/apt/trusted.gpg.d/koide3_ppa.gpg && \
-    echo "deb [signed-by=/etc/apt/trusted.gpg.d/koide3_ppa.gpg] https://koide3.github.io/ppa/ubuntu2404 ./" \
-        > /etc/apt/sources.list.d/koide3_ppa.list && \
-    if [ -d /usr/local/cuda ]; then GLIM_SUFFIX=-cuda13.1; else GLIM_SUFFIX=; fi && \
-    apt-get update && apt-get install -y --no-install-recommends \
-        libiridescence-dev libboost-all-dev libglfw3-dev libmetis-dev \
-        "libgtsam-points${GLIM_SUFFIX}-dev=${GTSAM_POINTS_VERSION}" \
-        "ros-${ROS_DISTRO}-glim${GLIM_SUFFIX}=${GLIM_VERSION}-0noble" \
-        "ros-${ROS_DISTRO}-glim-ros${GLIM_SUFFIX}=${GLIM_VERSION}-0noble" && \
-    ldconfig && rm -rf /var/lib/apt/lists/*
 
 # ── DepthAI v3 (OAK-D Pro) ────────────────────────────────────────────────────
 # Ubuntu 24.04's system Python is PEP 668 "externally managed";
@@ -146,9 +124,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 # dialout: VESC serial port; video, plugdev: cameras and USB devices.
 RUN if user="$(getent passwd "${USER_UID}" | cut -d: -f1)"; then userdel -r "$user"; fi && \
     if group="$(getent group "${USER_GID}" | cut -d: -f1)"; then groupdel "$group"; fi && \
-    groupadd -g "${USER_GID}" echou && \
-    useradd -m -s /bin/bash -u "${USER_UID}" -g echou -G dialout,video,plugdev echou && \
-    echo "echou ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/echou && chmod 0440 /etc/sudoers.d/echou
+    groupadd -g "${USER_GID}" rover && \
+    useradd -m -s /bin/bash -u "${USER_UID}" -g rover -G dialout,video,plugdev rover && \
+    echo "rover ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/rover && chmod 0440 /etc/sudoers.d/rover
 
 # ── Source ────────────────────────────────────────────────────────────────────
 WORKDIR /opt/rover
@@ -163,24 +141,20 @@ RUN LIVOX=ros2_ws/src/livox_ros_driver2; \
         git -C "$LIVOX" checkout "${LIVOX_DRIVER_REF}" && rm -rf "$LIVOX/.git"; \
     fi
 
-# ── Remaining rosdep keys, then build both workspaces ────────────────────────
-# rosdep only scans the packages build.sh builds, not the whole UCSD hub.
+# ── Remaining rosdep keys, then build the workspace ──────────────────────────
 RUN cp ros2_ws/src/livox_ros_driver2/package_ROS2.xml ros2_ws/src/livox_ros_driver2/package.xml && \
     apt-get update && (rosdep update --rosdistro "${ROS_DISTRO}" || true) && \
     rosdep install -r -y --ignore-src --rosdistro "${ROS_DISTRO}" \
-        --skip-keys "depthai livox_sdk glim_ros" \
-        --from-paths \
-            ros2_ws/src/robot_slam ros2_ws/src/livox_bringup ros2_ws/src/livox_ros_driver2 \
-            ros2_ws/src/oakd_publisher ros2_ws/src/keyframe_bridge ros2_ws/src/frontier_explorer \
-            ros2_ws/src/vesc ros2_ws/src/ucsd_robocar_hub2/ucsd_robocar_control2_pkg \
+        --skip-keys "depthai livox_sdk" \
+        --from-paths ros2_ws/src \
     ; rm -rf /var/lib/apt/lists/*
 
 # --no-symlink copies everything into install/, so build/ can be dropped to
 # shrink the image. For live-editing, see the dev service in docker/compose.yaml,
-# which mounts the checkout at /opt/echou-honors-dev and falls back on these
-# install/ folders until you build there. Read-only to the dev user.
-RUN scripts/build.sh onboard --no-symlink && scripts/build.sh offboard --no-symlink && \
-    rm -rf ros2_ws/build ros2_ws/log ros2_ws_offboard/build ros2_ws_offboard/log && \
+# which mounts the checkout at /opt/rover-dev and falls back on these
+# install/ folder until you build there. Read-only to the dev user.
+RUN scripts/build.sh --all --no-symlink && \
+    rm -rf ros2_ws/build ros2_ws/log && \
     chmod -R a+rX /opt/rover
 
 # ── Claude Code ───────────────────────────────────────────────────────────────
@@ -191,7 +165,7 @@ RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" && npm cac
 
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh && \
-    printf '\n# ROS 2 + rover workspaces for interactive shells that bypass /entrypoint.sh\n# (VS Code terminals, plain `docker exec ... bash`).\n[ -z "$ROVER_ENV_SOURCED" ] && [ -f /entrypoint.sh ] && source /entrypoint.sh\n' \
+    printf '\n# ROS 2 + rover workspace for interactive shells that bypass /entrypoint.sh\n# (VS Code terminals, plain `docker exec ... bash`).\n[ -z "$ROVER_ENV_SOURCED" ] && [ -f /entrypoint.sh ] && source /entrypoint.sh\n' \
         >> /etc/bash.bashrc
 
 # The CUDA base ships forward-compat driver libraries in compat_orin. They're
@@ -204,7 +178,7 @@ RUN rm -rf /usr/local/cuda/compat_orin
 
 ARG BASE_IMAGE
 LABEL org.opencontainers.image.title="rover" \
-      rover.versions="base=${BASE_IMAGE} ros=${ROS_DISTRO} ros-apt-source=${ROS_APT_SOURCE_VERSION} livox-sdk2=${LIVOX_SDK2_REF} livox-ros-driver2=${LIVOX_DRIVER_REF} depthai=${DEPTHAI_VERSION} glim=${GLIM_VERSION} gtsam-points=${GTSAM_POINTS_VERSION} node=${NODE_MAJOR}.x claude-code=${CLAUDE_CODE_VERSION}"
+      rover.versions="base=${BASE_IMAGE} ros=${ROS_DISTRO} ros-apt-source=${ROS_APT_SOURCE_VERSION} livox-sdk2=${LIVOX_SDK2_REF} livox-ros-driver2=${LIVOX_DRIVER_REF} depthai=${DEPTHAI_VERSION} node=${NODE_MAJOR}.x claude-code=${CLAUDE_CODE_VERSION}"
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["bash"]

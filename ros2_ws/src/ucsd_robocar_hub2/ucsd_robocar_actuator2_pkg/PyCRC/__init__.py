@@ -1,1 +1,0 @@
-from .CRCCCITT import CRCCCITT

@@ -15,9 +15,6 @@ env/
 # Docker: personal overrides (docker/.env.example is the template)
 docker/.env
 
-# NRP settings (ros2_ws_offboard/deploy/nrp/nrp.env.example is the template)
-ros2_ws_offboard/deploy/nrp/nrp.env
-
 # Python packaging
 build/
 dist/
@@ -27,12 +24,8 @@ pip-wheel-metadata/
 
 # Node
 node_modules/
-website/frontend/node_modules/
 
 # ROS / colcon build artifacts and logs
-slam_ros2_ws/build/
-slam_ros2_ws/install/
-slam_ros2_ws/log/
 **/build/
 **/install/
 **/log/
@@ -44,9 +37,6 @@ slam_ros2_ws/log/
 
 # Misc
 *.log
-
-# Saved SLAM maps (mounted into the Docker container)
-maps/
 
 # Recorded rosbags (scripts/record.sh; mounted into the Docker container)
 bags/
