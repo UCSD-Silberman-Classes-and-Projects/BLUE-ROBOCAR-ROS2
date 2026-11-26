@@ -55,6 +55,18 @@ jobs:
         with:
           submodules: recursive
 
+      # The Dockerfile builds Livox-SDK2 for one driver commit (LIVOX_DRIVER_REF).
+      # A submodule pointer that drifted from it builds against the wrong SDK and
+      # fails deep inside colcon; catch that here instead.
+      - name: Check livox_ros_driver2 submodule matches the Dockerfile pin
+        run: |
+          pinned=$(sed -n 's/^ARG LIVOX_DRIVER_REF=//p' docker/Dockerfile)
+          actual=$(git ls-tree HEAD ros2_ws/src/livox_ros_driver2 | awk '{print $3}')
+          if [ "$pinned" != "$actual" ]; then
+            echo "::error::livox_ros_driver2 submodule is at $actual but docker/Dockerfile pins LIVOX_DRIVER_REF=$pinned. Bump both together (with LIVOX_SDK2_REF), or reset the submodule: git update-index --cacheinfo 160000,$pinned,ros2_ws/src/livox_ros_driver2"
+            exit 1
+          fi
+
       # The CUDA image is large; the runner's preinstalled toolchains aren't needed.
       - name: Free disk space
         run: |
