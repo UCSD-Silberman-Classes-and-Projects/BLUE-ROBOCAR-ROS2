@@ -30,7 +30,7 @@ See [robot_hardware.md](robot_hardware.md) for the full parts list and USB devic
 
 ## 2. OS setup — JetPack 7.2 (Ubuntu 24.04) on Jetson Orin Nano
 
-The onboard computer is an NVIDIA Jetson Orin Nano running **JetPack 7.2.x** (Jetson Linux / L4T 39.2.x), which is Ubuntu 24.04. The ROS 2 release for 24.04 is **Jazzy**. (JetPack 6 is Ubuntu 22.04 and can't install Jazzy from apt; on a JetPack 6 host use the CPU-only container build in [docker.md](docker.md#2-build-the-image) instead.) This guide installs everything natively; [docker.md](docker.md) is the containerized alternative.
+The onboard computer is an NVIDIA Jetson Orin Nano running **JetPack 7.2.x** (Jetson Linux / L4T 39.2.x), which is Ubuntu 24.04. The ROS 2 release for 24.04 is **Jazzy**. (JetPack 6 is Ubuntu 22.04 and can't install Jazzy from apt; on a JetPack 6 host use the CPU-only container image (`:cpu` tag) in [docker.md](docker.md#2-get-the-image) instead.) This guide installs everything natively; [docker.md](docker.md) is the containerized alternative.
 
 ### Flash JetPack 7.2
 

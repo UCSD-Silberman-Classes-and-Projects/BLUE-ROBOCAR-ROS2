@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # dev.sh — manage the persistent development container (the `dev` service).
 #
-#   docker/dev.sh up            start it in the background (builds the image first if missing)
+#   docker/dev.sh pull          download the latest prebuilt image from ghcr.io
+#   docker/dev.sh up            start it in the background (pulls, or builds, the image if missing)
 #   docker/dev.sh shell         bash inside it, with ROS 2 and the workspaces sourced
 #   docker/dev.sh shell CMD...  run one command inside it instead
 #   docker/dev.sh down          stop and remove it (the rover-home volume, with your logins, stays)
@@ -21,11 +22,15 @@ VOLUME=rover-home
 COMPOSE=(docker compose -f "$DOCKER_DIR/compose.yaml")
 [ -f "$DOCKER_DIR/.env" ] && COMPOSE+=(--env-file "$DOCKER_DIR/.env")
 
-usage() { sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; }
 
 running() { [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null)" = true ]; }
 
 case "${1:-}" in
+    pull)
+        "${COMPOSE[@]}" pull dev
+        echo "Pulled. Restart the container to use it: docker/dev.sh down && docker/dev.sh up"
+        ;;
     up)
         # Create the bind-mount sources as you; Docker would create missing ones as root.
         mkdir -p /tmp/rover

@@ -5,13 +5,13 @@
 #   docker/run.sh scripts/sensors.sh       run a launch script
 #   IMAGE=rover:jazzy ROS_DOMAIN_ID=5 docker/run.sh scripts/bringup.sh
 #
-# Build the image first, from the repo root:
-#   docker build -f docker/Dockerfile -t rover:jazzy .
+# Uses the prebuilt image from ghcr.io (pulled on first run). To use a local
+# build instead: docker build -f docker/Dockerfile -t rover:jazzy . && IMAGE=rover:jazzy docker/run.sh
 #
 # Uses the NVIDIA runtime for GPU access; DOCKER_RUNTIME=runc runs without it.
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-IMAGE="${IMAGE:-rover:jazzy}"
+IMAGE="${IMAGE:-${ROVER_IMAGE:-ghcr.io/ucsd-silberman-classes-and-projects/blue-robocar-ros2:latest}}"
 mkdir -p /tmp/rover "$REPO_ROOT/bags"
 
 exec docker run --rm -it --init \

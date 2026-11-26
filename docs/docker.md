@@ -39,14 +39,43 @@ The container shares the host's network, devices and udev, so a few things still
 4. **Livox Ethernet link**: the static `192.168.1.50` connection from [reproduction.md §6](reproduction.md#6-livox-mid-360--network-setup-and-sdk) (the `nmcli` part only; the SDK is in the image).
 5. **Power mode**: `sudo nvpmodel -q`, then pick the highest mode. The in-container scripts can't query this.
 
-## 2. Build the image
+## 2. Get the image
+
+### Pull the prebuilt image (recommended)
+
+[`.github/workflows/docker.yml`](../.github/workflows/docker.yml) builds the image on GitHub's arm64 runners and pushes it to GitHub Container Registry on every push to `main` that touches `docker/`, `ros2_ws/` or `scripts/`, and on `v*` tags:
+
+```bash
+docker pull ghcr.io/ucsd-silberman-classes-and-projects/blue-robocar-ros2:latest
+# or, from the repo root:
+docker/dev.sh pull        # same thing, via docker/compose.yaml
+```
+
+Compose, `docker/dev.sh` and `docker/run.sh` use this image by default, so `docker/dev.sh up` pulls it on first use. Other tags:
+
+| Tag | Image |
+|-----|-------|
+| `latest` | CUDA image, latest `main` |
+| `cpu` | CPU-only image (`ros:jazzy-ros-base`), latest `main` |
+| `sha-<commit>` / `sha-<commit>-cpu` | the build of that commit; pin this for reproducible runs |
+| `1.2.3`, `1.2` (and `-cpu`) | from git tag `v1.2.3` |
+
+To use one, set `ROVER_IMAGE=ghcr.io/ucsd-silberman-classes-and-projects/blue-robocar-ros2:<tag>` in `docker/.env` (or in the environment for `docker/run.sh`).
+
+If the repository is private, the package is too. Log in first with a classic token that has `read:packages`: `echo <token> | docker login ghcr.io -u <github-user> --password-stdin`. An org owner can instead make the package public under the org's *Packages* → *Package settings* → *Change visibility*. Then no login is needed.
+
+The prebuilt image's `rover` user is `1000:1000`. If your host IDs differ (§4 step 2), build locally instead.
+
+### Build it locally
 
 From the repo root:
 
 ```bash
 docker compose -f docker/compose.yaml build
-# or: docker build -f docker/Dockerfile -t rover:jazzy .
+# or: docker build -f docker/Dockerfile -t rover:jazzy .   (then set ROVER_IMAGE=rover:jazzy)
 ```
+
+Compose tags its build with the `ROVER_IMAGE` name, so a later `docker/dev.sh pull` replaces a local build of the same name. Set `ROVER_IMAGE=rover:jazzy` in `docker/.env` to keep them apart.
 
 Building natively on the Orin Nano takes a while (Livox-SDK2 plus the C++ packages). The `livox_ros_driver2` submodule doesn't need to be initialised, because the Dockerfile fetches the pinned commit when the folder is empty.
 
@@ -142,7 +171,8 @@ The `rover` service runs the code baked into the image, so a source edit means a
 
 | Command | What it does |
 |---------|--------------|
-| `docker/dev.sh up` | Start `rover-dev` in the background. Builds the image first if there is none |
+| `docker/dev.sh pull` | Download the latest prebuilt image from ghcr.io (§2) |
+| `docker/dev.sh up` | Start `rover-dev` in the background. Pulls (or builds) the image first if there is none |
 | `docker/dev.sh shell` | Open bash inside it, with ROS 2 and the workspaces sourced. `docker/dev.sh shell <cmd>` runs one command |
 | `docker/dev.sh down` | Stop and remove the container. The `rover-home` volume (your logins) stays |
 | `docker/dev.sh status` | Is it running, and does the home volume exist? |
@@ -159,7 +189,7 @@ Do these steps once. Commands starting with `docker/` run **on the Jetson host**
 2. **On the host, check your user and group IDs** with `id -u`, `id -g` and `getent group render | cut -d: -f3`. The defaults are `1000`, `1000` and `993`, which match a stock Orin Nano. If any number differs, run `cp docker/.env.example docker/.env` and set `USER_UID`, `USER_GID` or `RENDER_GID` in `docker/.env` to your numbers. That file is git-ignored. The `render` group is what gives the non-root `rover` user the GPU.
 3. **Start the container and open a shell:**
    ```bash
-   docker/dev.sh up       # the first run builds the image; on the Orin Nano that takes a while
+   docker/dev.sh up       # the first run pulls the prebuilt image (several GB)
    docker/dev.sh shell
    ```
    The prompt changes to `rover@<hostname>:/opt/rover-dev$`. Until you build in step 7, a note says the image's copy of the workspace is in use. That's expected.
@@ -237,10 +267,11 @@ The VS Code server is installed under `/home/rover/.vscode-server`, so it's kept
 - Changes to `USER_UID` or `USER_GID`. Afterwards, run `docker/dev.sh reset-home` too, because the old home volume belongs to the old IDs.
 - Running your changes with the `rover` service, which only has the code baked into the image.
 
-To rebuild:
+To rebuild, either push the Dockerfile change to `main` and wait for the workflow, or build locally:
 
 ```bash
-docker compose -f docker/compose.yaml build dev
+docker/dev.sh pull        # after CI has published the new image
+# or: docker compose -f docker/compose.yaml build dev
 docker/dev.sh up          # recreates rover-dev on the new image; /home/rover is kept
 ```
 

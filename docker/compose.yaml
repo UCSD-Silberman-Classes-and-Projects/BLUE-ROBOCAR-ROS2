@@ -1,6 +1,7 @@
 # Rover template stack on the Jetson Orin Nano.
 #
-#   docker compose -f docker/compose.yaml build
+#   docker compose -f docker/compose.yaml pull                     # prebuilt image from ghcr.io
+#   docker compose -f docker/compose.yaml build                    # or build it locally
 #   docker compose -f docker/compose.yaml run --rm rover scripts/bringup.sh
 #   docker compose -f docker/compose.yaml run --rm rover            # shell
 #   docker/dev.sh up && docker/dev.sh shell                         # persistent dev container, see below
@@ -18,7 +19,9 @@
 name: rover
 
 x-rover: &rover
-  image: rover:jazzy
+  # Prebuilt by .github/workflows/docker.yml. Set ROVER_IMAGE in docker/.env to
+  # use another tag (e.g. :cpu, :sha-<commit>) or a local name like rover:jazzy.
+  image: ${ROVER_IMAGE:-ghcr.io/ucsd-silberman-classes-and-projects/blue-robocar-ros2:latest}
   build:
     context: ..
     dockerfile: docker/Dockerfile
